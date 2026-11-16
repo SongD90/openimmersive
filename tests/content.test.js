@@ -1884,4 +1884,32 @@ describe('Split view core tracer bullet', () => {
     expect(document.getElementById('ad-top').getAttribute('data-yll-clutter')).toBe('1');
     expect(document.getElementById('main-article').getAttribute('data-yll-clutter')).toBeNull();
   });
+
+  test('enterReaderMode distills the page into a clean Reading Mode article layout (matching readModeTranslation.png)', () => {
+    document.body.innerHTML = `
+      <header class="site-nav">Site Navigation Bar</header>
+      <aside class="sidebar">Trending News Sidebar</aside>
+      <article>
+        <h1>Nvidia C.E.O. Resigns</h1>
+        <figure>
+          <img src="https://example.com/photo.jpg" alt="Jensen Huang" />
+          <figcaption>Jensen Huang earlier this year.</figcaption>
+        </figure>
+        <p>President Trump said on Monday that he was open to seeing Jensen Huang reinstated.</p>
+      </article>
+      <footer>Site Footer</footer>
+    `;
+
+    const ok = fns.enterReaderMode();
+    expect(ok).toBe(true);
+    expect(document.body.classList.contains('yll-reader-body')).toBe(true);
+    expect(document.querySelector('.site-nav')).toBeNull();
+    expect(document.querySelector('.sidebar')).toBeNull();
+    expect(document.querySelector('footer')).toBeNull();
+    const reader = document.querySelector('.yll-reader-article');
+    expect(reader).not.toBeNull();
+    expect(reader.querySelector('h1').textContent).toBe('Nvidia C.E.O. Resigns');
+    expect(reader.querySelector('figcaption').textContent).toBe('Jensen Huang earlier this year.');
+    expect(reader.querySelector('p').textContent).toContain('President Trump said on Monday');
+  });
 });

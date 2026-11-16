@@ -55,7 +55,7 @@ api.commands.onCommand.addListener(async (command) => {
     if (tab) {
       const readTarget = extractReadModeUrl(tab.url);
       if (readTarget && api.tabs.update) {
-        await storageSet({ splitReopenOnLoad: true });
+        await storageSet({ splitReopenOnLoad: true, readerModeOnLoad: true });
         await api.tabs.update(tab.id, { url: readTarget });
         return;
       }
@@ -91,7 +91,7 @@ if (api.contextMenus) {
     } else if (info.menuItemId === 'yll-translate-page') {
       const readTarget = extractReadModeUrl(tab.url);
       if (readTarget && api.tabs.update) {
-        storageSet({ splitReopenOnLoad: true }).then(() => api.tabs.update(tab.id, { url: readTarget })).catch(() => {});
+        storageSet({ splitReopenOnLoad: true, readerModeOnLoad: true }).then(() => api.tabs.update(tab.id, { url: readTarget })).catch(() => {});
         return;
       }
       api.tabs.sendMessage(tab.id, { type: 'toggleTranslation' }).catch(() => {});

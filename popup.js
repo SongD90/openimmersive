@@ -116,7 +116,7 @@ btnTranslate.addEventListener('click', async () => {
   const targetLang = selLang.value;
   const readTarget = extractReadModeUrl(currentTab.url);
   if (readTarget && api.tabs.update) {
-    await setStorage({ targetLang, splitReopenOnLoad: true });
+    await setStorage({ targetLang, splitReopenOnLoad: true, readerModeOnLoad: true });
     await api.tabs.update(currentTab.id, { url: readTarget });
     window.close();
     return;
