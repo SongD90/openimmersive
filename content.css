@@ -65,59 +65,6 @@
   background: #2869b7;
 }
 
-/* 分栏视图内的净化阅读模式（Reader Mode）：隐藏广告、侧栏与悬浮遮罩，保留正文排版 */
-html[data-yll-reader="1"] [data-yll-clutter="1"] {
-  display: none !important;
-}
-
-/* 纯净阅读模式视图（从 Edge read:// 触发时，将页面重构为无干扰阅读器排版，对齐 readModeTranslation.png） */
-body.yll-reader-body {
-  margin: 0 !important;
-  padding: 36px 28px 80px !important;
-  background: #f8f4ec !important;
-  color: #1f2328 !important;
-  font-family: Georgia, "Noto Serif SC", "Source Han Serif SC", serif !important;
-  font-size: 18px !important;
-  line-height: 1.75 !important;
-}
-
-.yll-reader-article {
-  max-width: 720px;
-  margin: 0 auto;
-}
-
-.yll-reader-article h1 {
-  font-size: 30px;
-  line-height: 1.3;
-  margin: 0 0 18px 0;
-  color: #111827;
-}
-
-.yll-reader-article figcaption {
-  font-size: 13px;
-  font-style: italic;
-  line-height: 1.45;
-  color: #4b5563;
-  margin-top: 6px;
-}
-
-.yll-reader-article p,
-.yll-reader-article li,
-.yll-reader-article blockquote {
-  font-size: 18px;
-  line-height: 1.75;
-  margin: 0 0 1.15em 0;
-  color: #1f2328;
-}
-
-.yll-reader-article img,
-.yll-reader-article figure {
-  max-width: 100%;
-  height: auto;
-  margin: 0 0 18px 0;
-  display: block;
-}
-
 #yll-split-notice {
   position: fixed;
   bottom: 16px;

@@ -559,7 +559,7 @@
 
   // 状态与设置同步：hover/输入框走 state.engine/targetLang，先从存储初始化，再随改动更新。
   // 注意：必须显式列出所有键——getSettings() 只取 targetLang/engine，读不到行为开关。
-  storageGet(['targetLang', 'engine', 'displayMode', 'scrollSync', 'splitReopenOnLoad', 'readerModeOnLoad', 'readerModeActive', 'hoverTranslate', 'hoverKey',
+  storageGet(['targetLang', 'engine', 'displayMode', 'scrollSync', 'splitReopenOnLoad', 'hoverTranslate', 'hoverKey',
     'selectionTranslate', 'inputTranslate', 'inputTargetLang', 'autoTranslateSites',
     'autoTranslateLangs', 'floatBall', 'floatBallTop']).then(s => {
     if (s.engine) state.engine = s.engine;
@@ -576,15 +576,10 @@
     if (Array.isArray(s.autoTranslateSites)) autoSites = s.autoTranslateSites;
     if (Array.isArray(s.autoTranslateLangs)) autoLangs = s.autoTranslateLangs;
     if (paneRole !== 'top') {
-      if (s.readerModeActive) enterReaderMode();
       applyPaneRole(paneRole);
       return;
     }
     ensureFloatBall();
-    if (s.readerModeOnLoad) {
-      consumeReaderModeReopen(s);
-      return;
-    }
     if (s.splitReopenOnLoad) {
       consumeSplitReopen(s);
       return;
@@ -822,51 +817,6 @@
     if (!s || !s.splitReopenOnLoad) return false;
     await storageSet({ splitReopenOnLoad: false });
     await translatePage();
-    return true;
-  }
-
-  async function consumeReaderModeReopen(s) {
-    if (!s || !s.readerModeOnLoad) return false;
-    await storageSet({ readerModeOnLoad: false, readerModeActive: true });
-    enterReaderMode();
-    await translatePage();
-    return true;
-  }
-
-  // 将当前页面精简重构为纯净阅读模式（对齐 Edge Immersive Reader 视觉与结构）
-  function enterReaderMode() {
-    if (!document.body || document.querySelector('.yll-reader-article')) return false;
-    const root = document.querySelector('article, [itemprop="articleBody"], [role="article"], main, [role="main"]') ||
-      findContentRoot(collectBlocks()) || document.body;
-
-    const container = document.createElement('article');
-    container.className = 'yll-reader-article';
-
-    const h1 = root.querySelector('h1') || document.querySelector('h1');
-    if (h1 && h1.textContent.trim()) {
-      const title = document.createElement('h1');
-      title.textContent = h1.textContent.trim();
-      container.appendChild(title);
-    }
-
-    const ALLOWED = 'figure, p, h2, h3, h4, blockquote, ul, ol';
-    const seen = new WeakSet();
-    for (const node of root.querySelectorAll(ALLOWED)) {
-      if (seen.has(node)) continue;
-      if (node.closest(READER_CLUTTER_SELECTOR)) continue;
-      if (node.tagName !== 'FIGURE' && node.closest('figure, blockquote, ul, ol')) continue;
-      const clone = node.cloneNode(true);
-      clone.querySelectorAll('script, style, nav, aside, button, input, form').forEach(n => n.remove());
-      if (clone.tagName !== 'FIGURE' && !clone.textContent.trim()) continue;
-      seen.add(node);
-      container.appendChild(clone);
-    }
-
-    if (!container.children.length) return false;
-    document.body.innerHTML = '';
-    document.body.classList.add('yll-reader-body');
-    document.body.appendChild(container);
-    if (paneRole === 'top') ensureFloatBall();
     return true;
   }
 
@@ -1143,50 +1093,16 @@
       if (restoreScroll && typeof window.scrollTo === 'function') {
         window.scrollTo(0, lastOrigScrollTop);
       }
-      try { Promise.resolve(storageSet({ readerModeActive: false })).catch(() => {}); } catch (_) { /* ignore */ }
       try { Promise.resolve(api.runtime.sendMessage({ type: 'splitStop' })).catch(() => {}); } catch (_) { /* ignore */ }
     }
     splitWrap = null;
   }
 
-  const READER_CLUTTER_SELECTOR = [
-    'aside',
-    '[role="complementary"]',
-    '[aria-label*="advertisement" i]',
-    '[aria-label*="sponsored" i]',
-    '.ad',
-    '.ads',
-    '.ad-banner',
-    '.advertisement',
-    '[id*="google_ads"]',
-    '[class*="cookie-banner" i]',
-    '[id*="cookie-banner" i]',
-    '[class*="paywall" i]'
-  ].join(', ');
-
-  function cleanPaneClutter() {
-    if (!document.documentElement || !document.body) return;
-    document.documentElement.setAttribute('data-yll-reader', '1');
-    for (const el of document.querySelectorAll(READER_CLUTTER_SELECTOR)) {
-      if (el.querySelector('article, main, [role="main"]') || el.closest('article')) continue;
-      el.setAttribute('data-yll-clutter', '1');
-    }
-  }
-
-  function restorePaneClutter() {
-    if (document.documentElement) document.documentElement.removeAttribute('data-yll-reader');
-    document.querySelectorAll('[data-yll-clutter]').forEach(el => el.removeAttribute('data-yll-clutter'));
-  }
-
   async function applyPaneRole(role) {
     paneRole = role;
-    if (role === 'top') {
-      restorePaneClutter();
-      return;
-    }
+    if (role === 'top') return;
     removeFloatBall();
     hidePopup();
-    cleanPaneClutter();
     try {
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ yllSplit: true, type: 'paneReady', pane: role }, '*');
@@ -2699,8 +2615,6 @@
       classifyPaneLinkClick,
       setNavigateTop: (fn) => { navigateTopTo = fn; },
       consumeSplitReopen,
-      consumeReaderModeReopen,
-      enterReaderMode,
       translateBlock,
       translatePage,
       translateCurrentSelection,

@@ -26,10 +26,6 @@ function loadBg({ fetchImpl, storageData = {} } = {}) {
             const result = {};
             ks.forEach(k => { if (k in storageData) result[k] = storageData[k]; });
             return Promise.resolve(result);
-          },
-          set(items) {
-            Object.assign(storageData, items);
-            return Promise.resolve();
           }
         }
       },
@@ -37,7 +33,6 @@ function loadBg({ fetchImpl, storageData = {} } = {}) {
       tabs: {
         query: () => Promise.resolve([{ id: 1 }]),
         sendMessage: () => Promise.resolve(),
-        update: jest.fn(() => Promise.resolve()),
         onRemoved: { addListener: fn => { listeners.tabRemoved = fn; } }
       },
       declarativeNetRequest: {
@@ -969,21 +964,6 @@ describe('Split view frame-blocking header rules (Ticket 02)', () => {
     await ctx.__listeners.tabRemoved(42);
     expect(ctx.browser.declarativeNetRequest.updateSessionRules).toHaveBeenCalledWith({
       removeRuleIds: [10042]
-    });
-  });
-
-  test('extractReadModeUrl unwraps Edge read:// URLs and Alt+T redirects read:// tabs to translate', async () => {
-    const storageData = {};
-    const ctx = loadBg({ storageData });
-    const readUrl = 'read://https_www.nytimes.com/?url=https%3A%2F%2Fwww.nytimes.com%2F2026%2F11%2F16%2Fstory.html';
-    expect(ctx.extractReadModeUrl(readUrl)).toBe('https://www.nytimes.com/2026/11/16/story.html');
-    expect(ctx.extractReadModeUrl('https://example.com/')).toBe('');
-
-    ctx.browser.tabs.query = () => Promise.resolve([{ id: 7, url: readUrl }]);
-    await ctx.__listeners.command('toggle-translation');
-    expect(storageData.splitReopenOnLoad).toBe(true);
-    expect(ctx.browser.tabs.update).toHaveBeenCalledWith(7, {
-      url: 'https://www.nytimes.com/2026/11/16/story.html'
     });
   });
 });

@@ -1869,47 +1869,4 @@ describe('Split view core tracer bullet', () => {
     expect(stored.splitReopenOnLoad).toBe(false);
     expect(document.getElementById('yll-split-wrap')).not.toBeNull();
   });
-
-  test('Split view panes activate clean Reader mode and hide page clutter while keeping article content', async () => {
-    document.body.innerHTML = `
-      <aside id="sidebar-ad">Sponsored sidebar</aside>
-      <div role="complementary" id="comp-box">Related promos</div>
-      <div class="ad-banner" id="ad-top">Advertisement</div>
-      <article id="main-article"><p>Clean reader mode keeps the article body visible.</p></article>
-    `;
-    await fns.applyPaneRole('original');
-    expect(document.documentElement.getAttribute('data-yll-reader')).toBe('1');
-    expect(document.getElementById('sidebar-ad').getAttribute('data-yll-clutter')).toBe('1');
-    expect(document.getElementById('comp-box').getAttribute('data-yll-clutter')).toBe('1');
-    expect(document.getElementById('ad-top').getAttribute('data-yll-clutter')).toBe('1');
-    expect(document.getElementById('main-article').getAttribute('data-yll-clutter')).toBeNull();
-  });
-
-  test('enterReaderMode distills the page into a clean Reading Mode article layout (matching readModeTranslation.png)', () => {
-    document.body.innerHTML = `
-      <header class="site-nav">Site Navigation Bar</header>
-      <aside class="sidebar">Trending News Sidebar</aside>
-      <article>
-        <h1>Nvidia C.E.O. Resigns</h1>
-        <figure>
-          <img src="https://example.com/photo.jpg" alt="Jensen Huang" />
-          <figcaption>Jensen Huang earlier this year.</figcaption>
-        </figure>
-        <p>President Trump said on Monday that he was open to seeing Jensen Huang reinstated.</p>
-      </article>
-      <footer>Site Footer</footer>
-    `;
-
-    const ok = fns.enterReaderMode();
-    expect(ok).toBe(true);
-    expect(document.body.classList.contains('yll-reader-body')).toBe(true);
-    expect(document.querySelector('.site-nav')).toBeNull();
-    expect(document.querySelector('.sidebar')).toBeNull();
-    expect(document.querySelector('footer')).toBeNull();
-    const reader = document.querySelector('.yll-reader-article');
-    expect(reader).not.toBeNull();
-    expect(reader.querySelector('h1').textContent).toBe('Nvidia C.E.O. Resigns');
-    expect(reader.querySelector('figcaption').textContent).toBe('Jensen Huang earlier this year.');
-    expect(reader.querySelector('p').textContent).toContain('President Trump said on Monday');
-  });
 });

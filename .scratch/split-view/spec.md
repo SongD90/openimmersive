@@ -93,3 +93,7 @@ Add a third **display mode**, **Split view**. When it is on, the window is divid
 - **Assumptions made without a question** (recorded in the grilling session): repeated identical text is paired in order of appearance, same-page links just scroll, links opened in a new tab behave normally, and auto-translate sites open into Split view.
 - **Possible stale label file.** `docs/agents/triage-labels.md` is referenced by the issue tracker doc but does not exist. This spec uses the default `ready-for-agent` label.
 - **ADR file name.** `docs/adr/0001-split-view-loads-page-twice-in-a-frame.md` still has its original name, although it now describes two frames. Renaming was blocked by a permissions error.
+
+## Pending Updates
+
+- **05: Direct Reading Mode side-by-side translation (`img/readModeTranslation.png`)** — Tracked in [`.scratch/split-view/issues/05-edge-reading-mode-translation.md`](./issues/05-edge-reading-mode-translation.md) (`Status: pending`). Deliver a side-by-side Reading Mode translation experience matching `img/readModeTranslation.png` without dropping back to the normal website layout.
