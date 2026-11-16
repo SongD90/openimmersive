@@ -117,18 +117,12 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   // 分栏视图（Split view）：仅对当前标签页的子框架移除防嵌套响应头（ADR 0002）
-  if (message.type === 'splitStart') {
+  if (message.type === 'splitStart' || message.type === 'splitStop') {
     const tabId = sender && sender.tab ? sender.tab.id : message.tabId;
-    enableSplitFrameRules(tabId)
-      .then(() => sendResponse({ success: true }))
-      .catch(err => sendResponse({ success: false, error: err.message }));
-    return true;
-  }
-
-  if (message.type === 'splitStop') {
-    const tabId = sender && sender.tab ? sender.tab.id : message.tabId;
-    disableSplitFrameRules(tabId)
-      .then(() => sendResponse({ success: true }))
+    const op = message.type === 'splitStart'
+      ? enableSplitFrameRules(tabId, message.url || (sender && sender.tab && sender.tab.url))
+      : disableSplitFrameRules(tabId);
+    op.then(() => sendResponse({ success: true }))
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true;
   }
@@ -141,9 +135,17 @@ function splitRuleId(tabId) {
   return SPLIT_RULE_BASE + Number(tabId);
 }
 
-async function enableSplitFrameRules(tabId) {
+async function enableSplitFrameRules(tabId, pageUrl) {
   if (tabId == null || !api.declarativeNetRequest || !api.declarativeNetRequest.updateSessionRules) return;
   const id = splitRuleId(tabId);
+  const condition = {
+    tabIds: [Number(tabId)],
+    resourceTypes: ['sub_frame']
+  };
+  try {
+    const host = pageUrl ? new URL(pageUrl).hostname : '';
+    if (host) condition.requestDomains = [host];
+  } catch (_) { /* ignore invalid URL */ }
   await api.declarativeNetRequest.updateSessionRules({
     removeRuleIds: [id],
     addRules: [
@@ -157,10 +159,7 @@ async function enableSplitFrameRules(tabId) {
             { header: 'content-security-policy', operation: 'remove' }
           ]
         },
-        condition: {
-          tabIds: [Number(tabId)],
-          resourceTypes: ['sub_frame']
-        }
+        condition
       }
     ]
   });

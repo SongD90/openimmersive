@@ -221,6 +221,14 @@
     // 可编辑区不抢按键（Alt+字母在部分输入法/编辑器里有含义）
     if (editableTarget(eventTarget(e))) return;
     e.preventDefault();
+    if (paneRole === 'original' || paneRole === 'translated') {
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ yllSplit: true, type: 'paneToggle' }, '*');
+        }
+      } catch (_) { /* ignore */ }
+      return;
+    }
     if (action === 'toggle') {
       toggleTranslation();
     } else {
@@ -648,11 +656,11 @@
       if (changes.autoTranslateSites || changes.autoTranslateLangs) {
         if (changes.autoTranslateSites) autoSites = changes.autoTranslateSites.newValue || [];
         if (changes.autoTranslateLangs) autoLangs = changes.autoTranslateLangs.newValue || [];
-        if (autoSites.includes(location.hostname) || autoLangs.length) startUrlWatch();
+        if (paneRole === 'top' && (autoSites.includes(location.hostname) || autoLangs.length)) startUrlWatch();
       }
       if (changes.floatBall) {
         floatBallEnabled = changes.floatBall.newValue !== false;
-        if (floatBallEnabled) ensureFloatBall(); else removeFloatBall();
+        if (paneRole === 'top' && floatBallEnabled) ensureFloatBall(); else removeFloatBall();
       }
     });
   }
@@ -674,7 +682,7 @@
   }
 
   document.addEventListener('keydown', async (e) => {
-    if (!inputEnabled) return;
+    if (paneRole !== 'top' || !inputEnabled) return;
     if (!(e.altKey && e.key === 'Enter')) return;
     const el = editableTarget(eventTarget(e));
     if (!el) return;
@@ -894,7 +902,7 @@
 
   function reportPaneBlocks() {
     if (paneRole !== 'original' && paneRole !== 'translated') return;
-    const blocks = collectBlocks().map(el => {
+    const blocks = collectBlocks(document.body, { includeDone: true }).map(el => {
       const r = el.getBoundingClientRect();
       return {
         text: extractText(el),
@@ -940,11 +948,11 @@
 
   async function fallbackFromSplitView() {
     if (!splitWrap && !document.getElementById('yll-split-wrap')) return;
-    closeSplitView();
+    closeSplitView({ restoreScroll: false });
     state.isTranslated = false;
     state.isTranslating = false;
     showSplitNotice();
-    await translatePage({ forceBilingual: true });
+    await translatePage({ modeOverride: 'bilingual' });
   }
 
   async function handleSplitMessage(data, source) {
@@ -958,6 +966,10 @@
     }
     if (data.type === 'paneLoadFailed') {
       await fallbackFromSplitView();
+      return;
+    }
+    if (data.type === 'paneToggle') {
+      toggleTranslation();
       return;
     }
     if (data.type === 'paneBlocks') {
@@ -990,6 +1002,7 @@
         pairs,
         direction
       );
+      if (otherPane === 'original') lastOrigScrollTop = targetScroll;
       commandedScroll[otherPane] = targetScroll;
       otherFrame.contentWindow.postMessage({ yllSplit: true, type: 'syncScrollTo', scrollTop: targetScroll }, '*');
       return;
@@ -1031,7 +1044,7 @@
     lastOrigScrollTop = window.scrollY || 0;
     paneBlocks = { original: [], translated: [] };
     commandedScroll = { original: null, translated: null };
-    try { await api.runtime.sendMessage({ type: 'splitStart' }); } catch (_) { /* ignore */ }
+    try { await api.runtime.sendMessage({ type: 'splitStart', url: location.href }); } catch (_) { /* ignore */ }
 
     prevHtmlOverflow = document.documentElement.style.overflow || '';
     document.documentElement.style.overflow = 'hidden';
@@ -1096,14 +1109,14 @@
       }
     } catch (_) { /* ignore */ }
     if (role === 'translated') {
-      await translatePage({ forceReplace: true });
+      await translatePage({ modeOverride: 'replace' });
     }
     reportPaneBlocks();
   }
 
   // auto：自动翻译名单触发的（不是用户按的）。账号被拒停下以后，只有用户
   // 自己再按一次翻译（或换引擎）才重试，自动触发不算。
-  async function translatePage({ auto = false, forceReplace = false, forceBilingual = false } = {}) {
+  async function translatePage({ auto = false, modeOverride = '' } = {}) {
     if (state.isTranslating) return;
     if (halted && auto) return;
     halted = null;
@@ -1113,11 +1126,9 @@
     state.engine = settings.engine || 'google';
     state.targetLang = settings.targetLang || 'zh-CN';
     if (settings.scrollSync !== undefined) scrollSyncEnabled = settings.scrollSync !== false;
-    state.displayMode = (forceReplace || paneRole === 'translated')
+    state.displayMode = (paneRole === 'translated')
       ? 'replace'
-      : forceBilingual
-        ? 'bilingual'
-        : (settings.displayMode || 'bilingual');
+      : (modeOverride || settings.displayMode || 'bilingual');
 
     if (paneRole === 'top' && state.displayMode === 'split') {
       await openSplitView();
@@ -1958,7 +1969,7 @@
   // 这种局部里算覆盖率，几乎总会触发兜底，把用户名、按钮文案也捞进来。
   let pageLeafFallback = false;
 
-  function collectBlocks(root = document.body) {
+  function collectBlocks(root = document.body, { includeDone = false } = {}) {
     const results = [];
     const seen = new WeakSet();
 
@@ -1977,7 +1988,7 @@
 
     for (const el of within(root, selector)) {
       if (seen.has(el)) continue;
-      if (!shouldTranslate(el)) continue;
+      if (!shouldTranslate(el, { includeDone })) continue;
 
       const text = extractText(el);
       if (!text || text.trim().length < minTextLen(el, 12)) continue;
@@ -2003,7 +2014,7 @@
         // Bluesky 贴文没有 <p>，末尾的「1/5」徽标是个 inline-flex 的 div。
         if (el.querySelector(LEAF_BLOCK_SELECTOR) &&
             !(holdsOwnText(el) && !hasBlockDescendant(el, LEAF_BLOCK_SELECTOR))) continue;
-        if (!shouldTranslate(el)) continue;
+        if (!shouldTranslate(el, { includeDone })) continue;
         const text = extractText(el);
         if (!text || text.trim().length < 12) continue;
         let anc = el.parentElement, nested = false;
@@ -2017,10 +2028,10 @@
     return dropOuterOverlaps(results);
   }
 
-  function shouldTranslate(el) {
+  function shouldTranslate(el, { includeDone = false } = {}) {
     // 跳过已翻译——除非框架复用了这个节点、只换了里面的文字（React 列表、
     // SPA 换页常见）：标记还在，内容已不是当初翻的那段，撤掉旧译文重翻。
-    if (el.dataset.yllDone) {
+    if (!includeDone && el.dataset.yllDone) {
       const was = doneText.get(el);
       if (was === undefined || was === extractText(el)) return false;
       if (!mayRefresh(el)) return false;

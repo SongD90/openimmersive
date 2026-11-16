@@ -1652,6 +1652,10 @@ describe('Split view core tracer bullet', () => {
     expect(p.querySelector('.yll-tr-replace')).not.toBeNull();
     expect(p.querySelector('.yll-tr-replace').textContent).toBe('在译文栏里被替换的中文句子。');
     expect(p.querySelector('[data-yll-orig]')).not.toBeNull();
+    // collectBlocks with includeDone still returns the original text of already-translated blocks
+    expect(fns.collectBlocks(document.body, { includeDone: true }).map(el => fns.extractText(el))).toEqual([
+      'An English sentence that will be replaced in the translated pane.'
+    ]);
   });
 
   test('opening and closing Split view sends splitStart and splitStop to background', async () => {
@@ -1697,6 +1701,16 @@ describe('Split view core tracer bullet', () => {
     const tr = document.querySelector('#fb-p + .yll-tr');
     expect(tr).not.toBeNull();
     expect(tr.textContent).toBe('回退到双语对照的译文。');
+
+    // Readiness timeout also triggers fallback to Bilingual
+    fns.removeTranslations();
+    fns.setSplitLoadTimeout(15);
+    await fns.translatePage();
+    expect(document.getElementById('yll-split-wrap')).not.toBeNull();
+    await new Promise(r => setTimeout(r, 35));
+    expect(document.getElementById('yll-split-wrap')).toBeNull();
+    expect(document.getElementById('yll-split-notice')).not.toBeNull();
+    fns.setSplitLoadTimeout(10000);
   });
 
   test('pairBlocks matches blocks by original text in order and skips unmatched blocks', () => {
