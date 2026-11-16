@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title data-i18n-doc="extName">OpenImmersive Translator</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 360px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, '微软雅黑', sans-serif;
+      font-size: 13px;
+      color: #192738;
+      background: #fff;
+    }
+
+    :focus-visible { outline: 3px solid #2869b7; outline-offset: 3px; }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px;
+      background: #f4f8fd;
+      border-bottom: 1px solid #e3e9f0;
+      color: #192738;
+    }
+    .header img { width: 24px; height: 24px; border-radius: 5px; }
+    .header-title { font-size: 15px; font-weight: 700; }
+
+    .main-btn {
+      display: block;
+      width: calc(100% - 32px);
+      margin: 16px auto 0;
+      padding: 12px;
+      background: #2869b7;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+      text-align: center;
+    }
+    .main-btn:hover { background: #24599c; }
+    .main-btn:active { background: #1d4e89; }
+    .main-btn.active { background: #192738; }
+    .main-btn.active:hover { background: #0e1722; }
+    .main-btn:disabled { background: #9aa9ba; color: #fff; cursor: not-allowed; }
+
+    .status {
+      margin: 10px 16px 0;
+      font-size: 11px;
+      color: #607084;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 16px;
+    }
+    .status a { color: #2869b7; text-decoration: underline; word-break: break-all; }
+    .status a:hover { color: #24599c; }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #ccd6e2; flex-shrink: 0; }
+    .status-dot.on { background: #16a34a; }
+    .status-dot.loading { background: #f59e0b; animation: pulse 0.8s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.3;} }
+
+    .acct-actions { margin: 8px 16px 0; display: flex; flex-wrap: wrap; gap: 8px; }
+    .acct-btn { border: 1px solid #2869b7; border-radius: 6px; background: #fff; color: #2869b7; font: inherit; font-size: 12px; font-weight: 600; padding: 4px 10px; cursor: pointer; }
+    .acct-btn.primary { background: #2869b7; color: #fff; }
+
+    .rows { padding: 14px 16px 4px; display: flex; flex-direction: column; gap: 12px; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .row-label { font-size: 13px; color: #405166; }
+
+    select {
+      padding: 6px 10px;
+      border: 1px solid #ccd6e2;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #192738;
+      background: #fff;
+      cursor: pointer;
+      outline: none;
+      min-width: 130px;
+    }
+    select:focus { border-color: #2869b7; }
+
+    /* 开关 */
+    .switch { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; inset: 0; cursor: pointer;
+      background: #ccd6e2; border-radius: 22px; transition: .18s;
+    }
+    .slider::before {
+      content: ''; position: absolute; height: 16px; width: 16px; left: 3px; top: 3px;
+      background: #fff; border-radius: 50%; transition: .18s;
+    }
+    input:checked + .slider { background: #2869b7; }
+    input:checked + .slider::before { transform: translateX(18px); }
+    input:focus-visible + .slider { outline: 3px solid #2869b7; outline-offset: 3px; }
+
+    .hint { padding: 2px 16px 0; font-size: 11px; color: #607084; }
+    kbd {
+      display: inline-block; padding: 1px 5px; background: #f1f4f8;
+      border: 1px solid #e3e9f0; border-radius: 3px; font-size: 10px;
+      font-family: monospace; color: #405166;
+    }
+
+    hr { margin: 12px 16px 0; border: none; border-top: 1px solid #e3e9f0; }
+
+    .footer {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 16px 14px; font-size: 12px;
+    }
+    .footer a { color: #2869b7; text-decoration: none; cursor: pointer; }
+    .footer a:hover { color: #24599c; text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <img src="icons/icon-48.png" alt="" />
+    <span class="header-title" data-i18n="extName">OpenImmersive Translator</span>
+  </div>
+
+  <button class="main-btn" id="btnTranslate" data-i18n="popupTranslatePage">Translate this page</button>
+
+  <div class="status" id="status">
+    <span class="status-dot" id="statusDot"></span>
+    <span id="statusText"></span>
+  </div>
+  <div class="acct-actions" id="acctActions" style="display:none">
+    <button type="button" class="acct-btn primary" id="btnAcctLogin" data-i18n="acctLogIn">Log in</button>
+    <button type="button" class="acct-btn primary" id="btnAcctBuy" data-i18n="acctBuyCredits">Buy credits</button>
+    <button type="button" class="acct-btn" id="btnAcctGoogle" data-i18n="acctUseGoogle">Use free Google</button>
+  </div>
+
+  <div class="rows">
+    <div class="row">
+      <span class="row-label" data-i18n="popupTranslateTo">Translate into</span>
+      <!-- 常用语言在此，全部 199 种在设置页 -->
+      <select id="selLang"></select>
+    </div>
+    <div class="row">
+      <span class="row-label" data-i18n="popupHover">Hover translation (hold Alt over a paragraph)</span>
+      <label class="switch"><input type="checkbox" id="swHover" /><span class="slider"></span></label>
+    </div>
+    <div class="row">
+      <span class="row-label" data-i18n="popupAlwaysSite">Always translate this site</span>
+      <label class="switch"><input type="checkbox" id="swAutoSite" /><span class="slider"></span></label>
+    </div>
+    <div class="row">
+      <span class="row-label" data-i18n="popupFloatBall">Floating button on the page</span>
+      <label class="switch"><input type="checkbox" id="swFloatBall" /><span class="slider"></span></label>
+    </div>
+    <div class="row">
+      <span class="row-label"><span data-i18n="popupAlwaysLang">Always translate</span> <span id="autoLangName">this language</span></span>
+      <label class="switch"><input type="checkbox" id="swAutoLang" /><span class="slider"></span></label>
+    </div>
+  </div>
+
+  <div class="hint" data-i18n-html="popupShortcuts"></div>
+
+  <hr />
+
+  <div class="footer">
+    <a id="btnPdf" href="#" data-i18n="popupPdfLink">Translate a PDF file →</a>
+    <a id="btnOptions" href="#" data-i18n="popupMoreSettings">More settings</a>
+  </div>
+
+  <script src="i18n.js"></script>
+  <script src="languages.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

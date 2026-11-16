@@ -1,0 +1,21 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Open Immersive Translator mark.
+       A vermilion seal holding a sheet of paper: the top lines are the
+       author's ink, the bottom lines are the translation, set in the brand
+       vermilion like a proofreader's pass. Same palette as the site
+       (#C2402A vermilion, #fbfaf7 paper, #33302a warm ink); corner radius kept
+       tight to match the print-like radius scale. -->
+  <rect x="16" y="16" width="480" height="480" rx="88" fill="#c2402a"/>
+  <!-- sheet -->
+  <path d="M150 96h156l56 56v264a12 12 0 0 1-12 12H150a12 12 0 0 1-12-12V108a12 12 0 0 1 12-12z" fill="#fbfaf7"/>
+  <!-- corner fold -->
+  <path d="M306 96l56 56h-48a8 8 0 0 1-8-8z" fill="#efc0b4"/>
+  <!-- source text: warm ink -->
+  <rect x="176" y="180" width="160" height="18" rx="9" fill="#33302a"/>
+  <rect x="176" y="216" width="122" height="18" rx="9" fill="#33302a"/>
+  <!-- translation underneath: vermilion, the proofreader's colour -->
+  <rect x="176" y="276" width="160" height="18" rx="9" fill="#c2402a"/>
+  <rect x="176" y="312" width="98" height="18" rx="9" fill="#c2402a"/>
+  <!-- proofreader's caret between the two passes -->
+  <path d="M176 254l14-10 14 10" fill="none" stroke="#c2402a" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
