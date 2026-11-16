@@ -115,3 +115,38 @@ describe('options account card: signed-in and signed-out states', () => {
     expect(shown('btnOiLogout')).toBe(true);
   });
 });
+
+describe('options display mode', () => {
+  test('offers Split view alongside Bilingual and Replace and saves the selection', async () => {
+    const { storage } = await loadOptions({ auth: signedIn });
+    const sel = document.getElementById('selDisplayMode');
+    const values = Array.from(sel.options).map(o => o.value);
+    expect(values).toEqual(['bilingual', 'replace', 'split']);
+    expect(sel.value).toBe('bilingual');
+
+    sel.value = 'split';
+    document.getElementById('btnSave').click();
+    await new Promise(r => setTimeout(r, 0));
+    expect(storage.displayMode).toBe('split');
+  });
+
+  test('loads stored Split view display mode on startup', async () => {
+    await loadOptions({ auth: signedIn, stored: { displayMode: 'split' } });
+    expect(document.getElementById('selDisplayMode').value).toBe('split');
+  });
+
+  test('scroll sync toggle defaults to enabled and saves/loads preference', async () => {
+    const { storage } = await loadOptions({ auth: signedIn });
+    const sw = document.getElementById('swScrollSync');
+    expect(sw).not.toBeNull();
+    expect(sw.checked).toBe(true);
+
+    sw.checked = false;
+    document.getElementById('btnSave').click();
+    await new Promise(r => setTimeout(r, 0));
+    expect(storage.scrollSync).toBe(false);
+
+    await loadOptions({ auth: signedIn, stored: { scrollSync: false } });
+    expect(document.getElementById('swScrollSync').checked).toBe(false);
+  });
+});

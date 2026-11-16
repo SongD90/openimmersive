@@ -150,6 +150,18 @@
   "optReplace": {
     "message": "Translation only"
   },
+  "optSplitView": {
+    "message": "Split view (original pane + translated pane)"
+  },
+  "splitFallbackNotice": {
+    "message": "Split view couldn't load this page; switched to Bilingual."
+  },
+  "optScrollSync": {
+    "message": "Scroll sync in Split view"
+  },
+  "optScrollSyncDesc": {
+    "message": "Keep original pane and translated pane aligned block by block while scrolling"
+  },
   "optDisplayHint": {
     "message": "In translation-only mode the original is merely hidden — \"Show original\" brings all of it back."
   },

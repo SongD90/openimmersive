@@ -24,7 +24,7 @@ function fillLanguageSelects() {
 async function loadSettings() {
   fillLanguageSelects();
   const data = await getStorage([
-    'targetLang', 'engine', 'displayMode', 'apiKeys', 'sensitiveMask',
+    'targetLang', 'engine', 'displayMode', 'scrollSync', 'apiKeys', 'sensitiveMask',
     'hoverTranslate', 'hoverKey', 'selectionTranslate',
     'inputTranslate', 'inputTargetLang'
   ]);
@@ -32,6 +32,8 @@ async function loadSettings() {
   // 常用
   document.getElementById('defLang').value = data.targetLang || 'zh-CN';
   document.getElementById('selDisplayMode').value = data.displayMode || 'bilingual';
+  const swScrollSync = document.getElementById('swScrollSync');
+  if (swScrollSync) swScrollSync.checked = data.scrollSync !== false;
   document.getElementById('swHover').checked = data.hoverTranslate !== false;      // 默认开
   document.getElementById('selHoverKey').value = data.hoverKey || 'Alt';
   document.getElementById('swSelection').checked = data.selectionTranslate !== false; // 默认开
@@ -55,6 +57,7 @@ document.getElementById('btnSave').addEventListener('click', async () => {
   const settings = {
     targetLang: document.getElementById('defLang').value,
     displayMode: document.getElementById('selDisplayMode').value,
+    scrollSync: document.getElementById('swScrollSync') ? document.getElementById('swScrollSync').checked : true,
     hoverTranslate: document.getElementById('swHover').checked,
     hoverKey: document.getElementById('selHoverKey').value,
     selectionTranslate: document.getElementById('swSelection').checked,

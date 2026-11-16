@@ -62,6 +62,38 @@ describe('popup language picker', () => {
   });
 });
 
+describe('popup display mode picker', () => {
+  test('offers Bilingual, Replace, and Split view and saves the selection', async () => {
+    const { storage } = await loadPopup({ displayMode: 'bilingual' });
+    const selMode = document.getElementById('selDisplayMode');
+    expect(selMode).not.toBeNull();
+    expect(Array.from(selMode.options).map(o => o.value)).toEqual(['bilingual', 'replace', 'split']);
+    expect(selMode.value).toBe('bilingual');
+
+    selMode.value = 'split';
+    selMode.dispatchEvent(new Event('change'));
+    await new Promise(r => setTimeout(r, 0));
+    expect(storage.displayMode).toBe('split');
+  });
+
+  test('loads stored Split view display mode', async () => {
+    await loadPopup({ displayMode: 'split' });
+    expect(document.getElementById('selDisplayMode').value).toBe('split');
+  });
+
+  test('scroll sync toggle defaults to enabled and saves when toggled', async () => {
+    const { storage } = await loadPopup({});
+    const sw = document.getElementById('swScrollSync');
+    expect(sw).not.toBeNull();
+    expect(sw.checked).toBe(true);
+
+    sw.checked = false;
+    sw.dispatchEvent(new Event('change'));
+    await new Promise(r => setTimeout(r, 0));
+    expect(storage.scrollSync).toBe(false);
+  });
+});
+
 describe('popup status line', () => {
   test('a failure naming a site URL renders it as a link that opens a tab', async () => {
     const hint = 'Sign up free or log in at https://openimmersive.ai/?login=1 to use the AI tiers';

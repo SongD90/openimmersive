@@ -5,6 +5,8 @@ const t = (k, ...subs) => YLI18n.t(k, subs.length ? subs.map(String) : undefined
 
 const btnTranslate = document.getElementById('btnTranslate');
 const selLang = document.getElementById('selLang');
+const selDisplayMode = document.getElementById('selDisplayMode');
+const swScrollSync = document.getElementById('swScrollSync');
 const swHover = document.getElementById('swHover');
 const swAutoSite = document.getElementById('swAutoSite');
 const swFloatBall = document.getElementById('swFloatBall');
@@ -51,10 +53,12 @@ let engine = 'google'; // 引擎收进「更多设置」，popup 只读取、不
 // ===== 初始化 =====
 
 async function init() {
-  const data = await getStorage(['targetLang', 'engine', 'hoverTranslate', 'autoTranslateSites', 'floatBall', 'autoTranslateLangs']);
+  const data = await getStorage(['targetLang', 'engine', 'displayMode', 'scrollSync', 'hoverTranslate', 'autoTranslateSites', 'floatBall', 'autoTranslateLangs']);
   fillPopupLanguages(data.targetLang);
   selLang.value = data.targetLang || 'zh-CN';
   savedLang = selLang.value;
+  if (selDisplayMode) selDisplayMode.value = data.displayMode || 'bilingual';
+  if (swScrollSync) swScrollSync.checked = data.scrollSync !== false;
   engine = data.engine || 'google';
   swHover.checked = data.hoverTranslate !== false; // 默认开
   swFloatBall.checked = data.floatBall !== false; // 默认开
@@ -116,6 +120,12 @@ selLang.addEventListener('change', () => {
   savedLang = selLang.value;
   setStorage({ targetLang: selLang.value });
 });
+if (selDisplayMode) {
+  selDisplayMode.addEventListener('change', () => setStorage({ displayMode: selDisplayMode.value }));
+}
+if (swScrollSync) {
+  swScrollSync.addEventListener('change', () => setStorage({ scrollSync: swScrollSync.checked }));
+}
 swHover.addEventListener('change', () => setStorage({ hoverTranslate: swHover.checked }));
 swFloatBall.addEventListener('change', () => setStorage({ floatBall: swFloatBall.checked }));
 

@@ -150,6 +150,18 @@
   "optReplace": {
     "message": "仅显示译文"
   },
+  "optSplitView": {
+    "message": "分栏视图（原文栏 + 译文栏）"
+  },
+  "splitFallbackNotice": {
+    "message": "此页面无法在分栏视图中加载，已切换为双语对照。"
+  },
+  "optScrollSync": {
+    "message": "分栏视图同步滚动"
+  },
+  "optScrollSyncDesc": {
+    "message": "滚动时按文本块对齐原文栏与译文栏"
+  },
   "optDisplayHint": {
     "message": "仅显示译文时原文只是被隐藏，「恢复原文」可完整还原。"
   },

@@ -1569,3 +1569,290 @@ describe('translateBlock records why a segment failed', () => {
     expect(fns.state.translatedCount).toBe(0);
   });
 });
+
+// ─── Split view core tracer bullet (Ticket 01) ───────────────────────────────
+
+describe('Split view core tracer bullet', () => {
+  beforeEach(() => {
+    window.scrollTo = jest.fn();
+  });
+
+  afterEach(() => {
+    fns.applyPaneRole('top');
+    fns.removeTranslations();
+    global.browser.storage.local.get = () =>
+      Promise.resolve({ targetLang: 'zh-CN', engine: 'google', displayMode: 'bilingual' });
+    global.browser.runtime.sendMessage = () =>
+      Promise.resolve({ success: true, translation: '测试翻译' });
+  });
+
+  test('detectPaneRole distinguishes top, original pane, translated pane, and unrelated subframes', () => {
+    const topWin = {};
+    topWin.self = topWin;
+    topWin.top = topWin;
+    expect(fns.detectPaneRole({ self: topWin, top: topWin, name: '' })).toBe('top');
+    expect(fns.detectPaneRole({ self: {}, top: topWin, name: 'yll-pane-original' })).toBe('original');
+    expect(fns.detectPaneRole({ self: {}, top: topWin, name: 'yll-pane-translated' })).toBe('translated');
+    expect(fns.detectPaneRole({ self: {}, top: topWin, name: 'other-frame' })).toBe('subframe');
+  });
+
+  test('turning Split view on builds the 50/50 two-frame container and turning it off removes it', async () => {
+    document.body.innerHTML = '<article><p id="orig-p">Original article text remains untouched underneath.</p></article>';
+    global.browser.storage.local.get = () =>
+      Promise.resolve({ targetLang: 'zh-CN', engine: 'google', displayMode: 'split' });
+
+    await fns.translatePage();
+
+    const wrap = document.getElementById('yll-split-wrap');
+    expect(wrap).not.toBeNull();
+    const frames = wrap.querySelectorAll('iframe');
+    expect(frames.length).toBe(2);
+    expect(frames[0].getAttribute('data-yll-pane')).toBe('original');
+    expect(frames[0].name).toBe('yll-pane-original');
+    expect(frames[0].src).toBe(location.href);
+    expect(frames[1].getAttribute('data-yll-pane')).toBe('translated');
+    expect(frames[1].name).toBe('yll-pane-translated');
+    expect(frames[1].src).toBe(location.href);
+    expect(wrap.querySelector('.yll-split-divider')).not.toBeNull();
+    expect(fns.state.isTranslated).toBe(true);
+    // Underlying page was not modified with inline translations
+    expect(document.getElementById('orig-p').querySelector('[data-yll-inject]')).toBeNull();
+
+    fns.removeTranslations();
+    expect(document.getElementById('yll-split-wrap')).toBeNull();
+    expect(fns.state.isTranslated).toBe(false);
+  });
+
+  test('original pane hides extension UI and does not translate', async () => {
+    document.body.innerHTML = '<article><p>Original English paragraph that stays untranslated.</p></article>';
+    fns.ensureFloatBall();
+    expect(document.getElementById('yll-ball-wrap')).not.toBeNull();
+
+    await fns.applyPaneRole('original');
+
+    expect(document.getElementById('yll-ball-wrap')).toBeNull();
+    fns.ensureFloatBall();
+    expect(document.getElementById('yll-ball-wrap')).toBeNull();
+    expect(document.querySelector('[data-yll-inject]')).toBeNull();
+  });
+
+  test('translated pane hides extension UI and translates the page in Replace mode', async () => {
+    document.body.innerHTML = '<article><p id="tp">An English sentence that will be replaced in the translated pane.</p></article>';
+    global.browser.storage.local.get = () =>
+      Promise.resolve({ targetLang: 'zh-CN', engine: 'google', displayMode: 'split' });
+    global.browser.runtime.sendMessage = () =>
+      Promise.resolve({ success: true, translation: '在译文栏里被替换的中文句子。' });
+    fns.ensureFloatBall();
+
+    await fns.applyPaneRole('translated');
+
+    expect(document.getElementById('yll-ball-wrap')).toBeNull();
+    expect(fns.state.displayMode).toBe('replace');
+    const p = document.getElementById('tp');
+    expect(p.querySelector('.yll-tr-replace')).not.toBeNull();
+    expect(p.querySelector('.yll-tr-replace').textContent).toBe('在译文栏里被替换的中文句子。');
+    expect(p.querySelector('[data-yll-orig]')).not.toBeNull();
+  });
+
+  test('opening and closing Split view sends splitStart and splitStop to background', async () => {
+    document.body.innerHTML = '<article><p>Paragraph on the page that opens Split view.</p></article>';
+    const sent = [];
+    global.browser.storage.local.get = () =>
+      Promise.resolve({ targetLang: 'zh-CN', engine: 'google', displayMode: 'split' });
+    global.browser.runtime.sendMessage = (msg) => {
+      sent.push(msg.type);
+      return Promise.resolve({ success: true, translation: '测试翻译' });
+    };
+
+    await fns.translatePage();
+    expect(sent).toContain('splitStart');
+
+    fns.removeTranslations();
+    expect(sent).toContain('splitStop');
+  });
+
+  test('falls back to Bilingual with a notice when the translated pane fails to load or times out, and ignores untrusted senders', async () => {
+    document.body.innerHTML = '<article><p id="fb-p">An English paragraph that should fall back to Bilingual mode.</p></article>';
+    global.browser.storage.local.get = () =>
+      Promise.resolve({ targetLang: 'zh-CN', engine: 'google', displayMode: 'split' });
+    global.browser.runtime.sendMessage = (msg) => {
+      if (msg.type === 'translate') return Promise.resolve({ success: true, translation: '回退到双语对照的译文。' });
+      return Promise.resolve({ success: true });
+    };
+
+    await fns.translatePage();
+    const wrap = document.getElementById('yll-split-wrap');
+    expect(wrap).not.toBeNull();
+    const transFrame = wrap.querySelector('[data-yll-pane="translated"]');
+
+    // Message from an untrusted source must be ignored
+    await fns.handleSplitMessage({ yllSplit: true, type: 'paneLoadFailed' }, {});
+    expect(document.getElementById('yll-split-wrap')).not.toBeNull();
+
+    // Message from the translated pane triggers fallback to Bilingual with notice
+    await fns.handleSplitMessage({ yllSplit: true, type: 'paneLoadFailed' }, transFrame.contentWindow);
+    expect(document.getElementById('yll-split-wrap')).toBeNull();
+    expect(document.getElementById('yll-split-notice')).not.toBeNull();
+    expect(fns.state.displayMode).toBe('bilingual');
+    const tr = document.querySelector('#fb-p + .yll-tr');
+    expect(tr).not.toBeNull();
+    expect(tr.textContent).toBe('回退到双语对照的译文。');
+  });
+
+  test('pairBlocks matches blocks by original text in order and skips unmatched blocks', () => {
+    // Identical pages
+    expect(fns.pairBlocks(['A', 'B'], ['A', 'B'])).toEqual([
+      { origIndex: 0, transIndex: 0 },
+      { origIndex: 1, transIndex: 1 }
+    ]);
+
+    // Extra ad block in one pane + repeated text ("Share")
+    const orig = ['Headline', 'Left Ad Only', 'First paragraph', 'Share', 'Second paragraph', 'Share'];
+    const trans = ['Headline', 'First paragraph', 'Right Ad Only', 'Share', 'Second paragraph', 'Share'];
+    expect(fns.pairBlocks(orig, trans)).toEqual([
+      { origIndex: 0, transIndex: 0 },
+      { origIndex: 2, transIndex: 1 },
+      { origIndex: 3, transIndex: 3 },
+      { origIndex: 4, transIndex: 4 },
+      { origIndex: 5, transIndex: 5 }
+    ]);
+
+    // No matches
+    expect(fns.pairBlocks(['One', 'Two'], ['Three', 'Four'])).toEqual([]);
+  });
+
+  test('computeSyncedScrollTop aligns matching blocks across panes of different heights', () => {
+    const pairs = [
+      { origIndex: 0, transIndex: 0 },
+      { origIndex: 1, transIndex: 1 }
+    ];
+    // Original blocks are taller (200px each), translated blocks are shorter (100px each)
+    const origMetrics = [
+      { top: 100, height: 200 },
+      { top: 350, height: 200 }
+    ];
+    const transMetrics = [
+      { top: 80, height: 100 },
+      { top: 200, height: 100 }
+    ];
+
+    expect(fns.computeSyncedScrollTop(0, origMetrics, transMetrics, pairs, 'origToTrans')).toBe(0);
+    // Halfway through block 0 in original (100 + 100 = 200) -> halfway through block 0 in translated (80 + 50 = 130)
+    expect(fns.computeSyncedScrollTop(200, origMetrics, transMetrics, pairs, 'origToTrans')).toBe(130);
+    // Start of block 1 in translated (200) -> start of block 1 in original (350)
+    expect(fns.computeSyncedScrollTop(200, transMetrics, origMetrics, pairs, 'transToOrig')).toBe(350);
+  });
+
+  test('scroll sync forwards aligned scroll to the other pane, guards against feedback loops, respects toggle, and restores scroll on exit', async () => {
+    document.body.innerHTML = '<article><p>Article body paragraph for split scroll sync.</p></article>';
+    global.browser.storage.local.get = () =>
+      Promise.resolve({ targetLang: 'zh-CN', engine: 'google', displayMode: 'split', scrollSync: true });
+    window.scrollTo = jest.fn();
+
+    await fns.translatePage();
+    const wrap = document.getElementById('yll-split-wrap');
+    const origFrame = wrap.querySelector('[data-yll-pane="original"]');
+    const transFrame = wrap.querySelector('[data-yll-pane="translated"]');
+    const origPost = jest.spyOn(origFrame.contentWindow, 'postMessage');
+    const transPost = jest.spyOn(transFrame.contentWindow, 'postMessage');
+
+    await fns.handleSplitMessage({
+      yllSplit: true,
+      type: 'paneBlocks',
+      blocks: [{ text: 'First block', top: 100, height: 200 }]
+    }, origFrame.contentWindow);
+    await fns.handleSplitMessage({
+      yllSplit: true,
+      type: 'paneBlocks',
+      blocks: [{ text: 'First block', top: 80, height: 100 }]
+    }, transFrame.contentWindow);
+
+    // Original pane scrolls to 200 (50% into block 0) -> translated pane is commanded to scroll to 130
+    await fns.handleSplitMessage({ yllSplit: true, type: 'paneScrolled', scrollTop: 200 }, origFrame.contentWindow);
+    expect(transPost).toHaveBeenCalledWith({ yllSplit: true, type: 'syncScrollTo', scrollTop: 130 }, '*');
+
+    // Feedback echo from translated pane at 130 must NOT bounce back to original pane
+    origPost.mockClear();
+    await fns.handleSplitMessage({ yllSplit: true, type: 'paneScrolled', scrollTop: 130 }, transFrame.contentWindow);
+    expect(origPost).not.toHaveBeenCalled();
+
+    // Disabling scroll sync stops syncing
+    fns.setScrollSync(false);
+    transPost.mockClear();
+    await fns.handleSplitMessage({ yllSplit: true, type: 'paneScrolled', scrollTop: 250 }, origFrame.contentWindow);
+    expect(transPost).not.toHaveBeenCalled();
+
+    // Closing Split view restores underlying page scroll to the last original pane scrollTop (250)
+    fns.removeTranslations();
+    expect(window.scrollTo).toHaveBeenCalledWith(0, 250);
+  });
+
+  test('classifyPaneLinkClick distinguishes full navigation, same-page anchors, and new-tab/modifier clicks', () => {
+    const base = 'https://example.com/articles/1';
+    const mkLink = (attrs) => {
+      const a = document.createElement('a');
+      Object.entries(attrs).forEach(([k, v]) => a.setAttribute(k, v));
+      return a;
+    };
+
+    // Normal article link -> navigate
+    expect(fns.classifyPaneLinkClick({ button: 0 }, mkLink({ href: '/articles/2' }), base)).toEqual({
+      action: 'navigate',
+      url: 'https://example.com/articles/2'
+    });
+
+    // Same-page anchor -> anchor
+    expect(fns.classifyPaneLinkClick({ button: 0 }, mkLink({ href: '#section-2' }), base)).toEqual({
+      action: 'anchor',
+      url: 'https://example.com/articles/1#section-2'
+    });
+    expect(fns.classifyPaneLinkClick({ button: 0 }, mkLink({ href: 'https://example.com/articles/1#top' }), base)).toEqual({
+      action: 'anchor',
+      url: 'https://example.com/articles/1#top'
+    });
+
+    // New tab target="_blank" or modifier click -> ignore
+    expect(fns.classifyPaneLinkClick({ button: 0 }, mkLink({ href: '/articles/2', target: '_blank' }), base)).toEqual({
+      action: 'ignore'
+    });
+    expect(fns.classifyPaneLinkClick({ button: 0, ctrlKey: true }, mkLink({ href: '/articles/2' }), base)).toEqual({
+      action: 'ignore'
+    });
+    expect(fns.classifyPaneLinkClick({ button: 1 }, mkLink({ href: '/articles/2' }), base)).toEqual({
+      action: 'ignore'
+    });
+  });
+
+  test('paneNavigate from a verified pane navigates the top tab and marks Split view to reopen on the new page', async () => {
+    document.body.innerHTML = '<article><p>Article text for link navigation test.</p></article>';
+    const stored = {};
+    global.browser.storage.local.get = () =>
+      Promise.resolve({ targetLang: 'zh-CN', engine: 'google', displayMode: 'split', ...stored });
+    global.browser.storage.local.set = (items) => {
+      Object.assign(stored, items);
+      return Promise.resolve();
+    };
+    const navigated = [];
+    fns.setNavigateTop((url) => navigated.push(url));
+
+    await fns.translatePage();
+    const wrap = document.getElementById('yll-split-wrap');
+    const origFrame = wrap.querySelector('[data-yll-pane="original"]');
+
+    // Untrusted source is ignored
+    await fns.handleSplitMessage({ yllSplit: true, type: 'paneNavigate', url: 'https://evil.example/' }, {});
+    expect(navigated).toEqual([]);
+
+    // Verified pane triggers top-level navigation and sets splitReopenOnLoad
+    await fns.handleSplitMessage({ yllSplit: true, type: 'paneNavigate', url: 'https://example.com/next' }, origFrame.contentWindow);
+    expect(navigated).toEqual(['https://example.com/next']);
+    expect(stored.splitReopenOnLoad).toBe(true);
+
+    // On the next page load, consumeSplitReopen reopens Split view and clears the flag
+    fns.removeTranslations();
+    expect(document.getElementById('yll-split-wrap')).toBeNull();
+    await fns.consumeSplitReopen(stored);
+    expect(stored.splitReopenOnLoad).toBe(false);
+    expect(document.getElementById('yll-split-wrap')).not.toBeNull();
+  });
+});

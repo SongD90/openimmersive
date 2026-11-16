@@ -33,6 +33,53 @@
   color: inherit;
 }
 
+/* 分栏视图（Split view）：50/50 左右双栏容器，左为原文栏（original pane），右为译文栏（translated pane） */
+#yll-split-wrap {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 2147483645;
+  display: flex;
+  flex-direction: row;
+  background: #ffffff;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.yll-split-pane {
+  flex: 1 1 50%;
+  width: 50%;
+  height: 100%;
+  border: none;
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+}
+
+.yll-split-divider {
+  flex: 0 0 2px;
+  width: 2px;
+  height: 100%;
+  background: #2869b7;
+}
+
+#yll-split-notice {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 2147483647;
+  max-width: 340px;
+  padding: 10px 14px;
+  background: #ffffff;
+  color: #192738;
+  border: 1px solid #e3e9f0;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
 /* 悬浮球：点一下整页翻译/还原，沿右边缘上下拖。高度按视口比例记（content.js
    写 top），默认在六成高处，避开 X 等站右下角的聊天按钮 */
 #yll-ball-wrap {

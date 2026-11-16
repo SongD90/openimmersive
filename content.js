@@ -26,12 +26,29 @@
   }
 
   // ===== 状态 =====
+  const PANE_ORIGINAL = 'yll-pane-original';
+  const PANE_TRANSLATED = 'yll-pane-translated';
+
+  function detectPaneRole(win = window) {
+    if (win && win.name === PANE_ORIGINAL) return 'original';
+    if (win && win.name === PANE_TRANSLATED) return 'translated';
+    try {
+      if (win && win.self !== win.top) return 'subframe';
+    } catch (_) {
+      return 'subframe';
+    }
+    return 'top';
+  }
+
+  let paneRole = detectPaneRole(window);
+  if (paneRole === 'subframe' && !(typeof window !== 'undefined' && window.__yllTestMode)) return;
+
   const state = {
     isTranslated: false,
     isTranslating: false,
     engine: 'google',
     targetLang: 'zh-CN',
-    displayMode: 'bilingual', // 'bilingual' 双语对照 | 'replace' 仅显示译文
+    displayMode: 'bilingual', // 'bilingual' 双语对照 | 'replace' 仅显示译文 | 'split' 分栏视图
     translatedCount: 0,
     totalCount: 0,
     // 整页 0 段成功时，这两个是唯一能回答「为什么点了没反应」的东西。
@@ -123,6 +140,7 @@
 
   // ===== 消息监听（来自popup）=====
   api.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    if (paneRole !== 'top') return false;
     if (msg.type === 'getStatus') {
       sendResponse({
         isTranslated: state.isTranslated,
@@ -224,7 +242,7 @@
   document.addEventListener('touchend', onMouseUp);
 
   function onMouseUp(e) {
-    if (!selectionEnabled) return;
+    if (paneRole !== 'top' || !selectionEnabled) return;
     // 点击了自己的popup则忽略
     if (selPopup && selPopup.contains(e.target)) return;
     clearTimeout(selSettleTimer);
@@ -424,7 +442,7 @@
   // 悬浮球 + 悬停菜单：点球=翻译/还原（老行为不变），悬停展开动作菜单
   //（第二入口，对齐同类插件的球菜单/侧边栏，纯页面内实现不加任何新权限）。
   function ensureFloatBall() {
-    if (!floatBallEnabled || floatBall || !document.body) return;
+    if (paneRole !== 'top' || !floatBallEnabled || (floatBall && floatBall.isConnected) || !document.body) return;
     ballWrap = document.createElement('div');
     ballWrap.id = 'yll-ball-wrap';
     ballWrap.setAttribute('data-yll-ui', 'true');
@@ -533,12 +551,13 @@
 
   // 状态与设置同步：hover/输入框走 state.engine/targetLang，先从存储初始化，再随改动更新。
   // 注意：必须显式列出所有键——getSettings() 只取 targetLang/engine，读不到行为开关。
-  storageGet(['targetLang', 'engine', 'displayMode', 'hoverTranslate', 'hoverKey',
+  storageGet(['targetLang', 'engine', 'displayMode', 'scrollSync', 'splitReopenOnLoad', 'hoverTranslate', 'hoverKey',
     'selectionTranslate', 'inputTranslate', 'inputTargetLang', 'autoTranslateSites',
     'autoTranslateLangs', 'floatBall', 'floatBallTop']).then(s => {
     if (s.engine) state.engine = s.engine;
     if (s.targetLang) state.targetLang = s.targetLang;
     if (s.displayMode) state.displayMode = s.displayMode;
+    if (s.scrollSync === false) scrollSyncEnabled = false;
     if (s.hoverTranslate === false) hoverEnabled = false;
     if (typeof s.hoverKey === 'string') hoverKey = s.hoverKey;
     if (s.selectionTranslate === false) selectionEnabled = false;
@@ -548,7 +567,15 @@
     if (typeof s.floatBallTop === 'number') ballTop = s.floatBallTop;
     if (Array.isArray(s.autoTranslateSites)) autoSites = s.autoTranslateSites;
     if (Array.isArray(s.autoTranslateLangs)) autoLangs = s.autoTranslateLangs;
+    if (paneRole !== 'top') {
+      applyPaneRole(paneRole);
+      return;
+    }
     ensureFloatBall();
+    if (s.splitReopenOnLoad) {
+      consumeSplitReopen(s);
+      return;
+    }
     // 站内跳转也要按自动规则翻（换页后原先没翻的状态下才用得上）
     if (autoSites.includes(location.hostname) || autoLangs.length) startUrlWatch();
     // 自动翻译此网站 / 总是翻译该语言：命中就整页翻译（等动态内容稍稳后触发）
@@ -612,6 +639,7 @@
       }
       if (changes.targetLang) state.targetLang = changes.targetLang.newValue || state.targetLang;
       if (changes.displayMode) state.displayMode = changes.displayMode.newValue || state.displayMode;
+      if (changes.scrollSync) scrollSyncEnabled = changes.scrollSync.newValue !== false;
       if (changes.hoverTranslate) hoverEnabled = changes.hoverTranslate.newValue !== false;
       if (changes.hoverKey) hoverKey = changes.hoverKey.newValue || hoverKey;
       if (changes.selectionTranslate) selectionEnabled = changes.selectionTranslate.newValue !== false;
@@ -714,7 +742,7 @@
   }
 
   document.addEventListener('mouseover', (e) => {
-    if (!hoverEnabled || hoverKey === 'off') return;
+    if (paneRole !== 'top' || !hoverEnabled || hoverKey === 'off') return;
     if (!hoverKeyHeld(e)) return;
     const block = findHoverBlock(e.target);
     if (!block || block === lastHoverEl || block.dataset.yllDone) return;
@@ -736,9 +764,346 @@
     return r.bottom > -margin && r.top < window.innerHeight + margin;
   }
 
+  // ===== 分栏视图（Split view）：双栏容器与栏角色控制 =====
+  let splitWrap = null;
+  let prevHtmlOverflow = '';
+  let splitLoadTimer = null;
+  let splitLoadTimeoutMs = 10000;
+  let splitNotice = null;
+  let scrollSyncEnabled = true;
+  let lastOrigScrollTop = 0;
+  let paneBlocks = { original: [], translated: [] };
+  let commandedScroll = { original: null, translated: null };
+  let suppressNextScroll = false;
+  let navigateTopTo = (url) => { location.assign(url); };
+
+  // 判定栏内链接点击行为：普通链接跳整页并保持分栏，页内锚点就地滚，新标签页/修饰键点击保持默认
+  function classifyPaneLinkClick(event = {}, anchor, currentHref = location.href) {
+    if (!anchor || anchor.tagName !== 'A') return { action: 'ignore' };
+    if (event.defaultPrevented) return { action: 'ignore' };
+    if (event.button != null && event.button !== 0) return { action: 'ignore' };
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return { action: 'ignore' };
+    if (anchor.hasAttribute('download')) return { action: 'ignore' };
+    const target = (anchor.getAttribute('target') || '').trim().toLowerCase();
+    if (target && target !== '_self') return { action: 'ignore' };
+    const rawHref = (anchor.getAttribute('href') || '').trim();
+    if (!rawHref || /^(javascript|mailto|tel):/i.test(rawHref)) return { action: 'ignore' };
+    let resolved;
+    try {
+      resolved = new URL(rawHref, currentHref);
+    } catch (_) {
+      return { action: 'ignore' };
+    }
+    const baseCurrent = String(currentHref).split('#')[0];
+    const baseResolved = resolved.href.split('#')[0];
+    if (rawHref.startsWith('#') || (baseResolved === baseCurrent && resolved.hash)) {
+      return { action: 'anchor', url: resolved.href };
+    }
+    if (resolved.protocol === 'http:' || resolved.protocol === 'https:') {
+      return { action: 'navigate', url: resolved.href };
+    }
+    return { action: 'ignore' };
+  }
+
+  async function consumeSplitReopen(s) {
+    if (!s || !s.splitReopenOnLoad) return false;
+    await storageSet({ splitReopenOnLoad: false });
+    await translatePage();
+    return true;
+  }
+
+  document.addEventListener('click', (e) => {
+    if (paneRole !== 'original' && paneRole !== 'translated') return;
+    const target = eventTarget(e);
+    const anchor = target && target.closest ? target.closest('a[href]') : null;
+    const decision = classifyPaneLinkClick(e, anchor, location.href);
+    if (decision.action === 'navigate') {
+      e.preventDefault();
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ yllSplit: true, type: 'paneNavigate', url: decision.url }, '*');
+        }
+      } catch (_) { /* ignore */ }
+    }
+  });
+
+  // 按原文内容配对两栏的块（Block pairing）：重复文本按出现顺序配对，仅一侧有的块（如广告）跳过
+  function pairBlocks(origTexts = [], transTexts = []) {
+    const norm = (s) => String(s || '').trim().replace(/\s+/g, ' ');
+    const buckets = new Map();
+    for (let i = 0; i < origTexts.length; i++) {
+      const key = norm(origTexts[i]);
+      if (!key) continue;
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(i);
+    }
+    const pairs = [];
+    for (let tIdx = 0; tIdx < transTexts.length; tIdx++) {
+      const key = norm(transTexts[tIdx]);
+      const list = key ? buckets.get(key) : null;
+      if (list && list.length) {
+        pairs.push({ origIndex: list.shift(), transIndex: tIdx });
+      }
+    }
+    return pairs.sort((a, b) => a.origIndex - b.origIndex);
+  }
+
+  // 根据配对块的文档坐标计算目标栏应滚动到的位置（Scroll sync）
+  function computeSyncedScrollTop(sourceScrollTop, sourceMetrics = [], targetMetrics = [], pairs = [], direction = 'origToTrans') {
+    const scroll = Math.max(0, Number(sourceScrollTop) || 0);
+    if (scroll <= 0 || !pairs.length) return scroll;
+
+    const mapped = [];
+    for (const p of pairs) {
+      const sIdx = direction === 'origToTrans' ? p.origIndex : p.transIndex;
+      const tIdx = direction === 'origToTrans' ? p.transIndex : p.origIndex;
+      const s = sourceMetrics[sIdx];
+      const t = targetMetrics[tIdx];
+      if (s && t) mapped.push({ s, t });
+    }
+    if (!mapped.length) return scroll;
+
+    const first = mapped[0];
+    if (scroll < first.s.top) {
+      return Math.round((scroll / Math.max(first.s.top, 1)) * first.t.top);
+    }
+
+    for (let i = 0; i < mapped.length; i++) {
+      const { s, t } = mapped[i];
+      const sEnd = s.top + Math.max(s.height, 1);
+      const tHeight = Math.max(t.height, 1);
+      if (scroll <= sEnd) {
+        const ratio = (scroll - s.top) / Math.max(s.height, 1);
+        return Math.round(t.top + ratio * tHeight);
+      }
+      if (i + 1 < mapped.length) {
+        const next = mapped[i + 1];
+        if (scroll < next.s.top) {
+          const gapRatio = (scroll - sEnd) / Math.max(next.s.top - sEnd, 1);
+          const tEnd = t.top + tHeight;
+          return Math.round(tEnd + gapRatio * (next.t.top - tEnd));
+        }
+      }
+    }
+
+    const last = mapped[mapped.length - 1];
+    const lastSEnd = last.s.top + Math.max(last.s.height, 1);
+    const lastTEnd = last.t.top + Math.max(last.t.height, 1);
+    return Math.round(lastTEnd + (scroll - lastSEnd));
+  }
+
+  function reportPaneBlocks() {
+    if (paneRole !== 'original' && paneRole !== 'translated') return;
+    const blocks = collectBlocks().map(el => {
+      const r = el.getBoundingClientRect();
+      return {
+        text: extractText(el),
+        top: r.top + window.scrollY,
+        height: Math.max(r.height || el.offsetHeight || 1, 1)
+      };
+    });
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ yllSplit: true, type: 'paneBlocks', pane: paneRole, blocks }, '*');
+      }
+    } catch (_) { /* ignore */ }
+  }
+
+  function showSplitNotice() {
+    hideSplitNotice();
+    if (!document.body) return;
+    const box = document.createElement('div');
+    box.id = 'yll-split-notice';
+    box.setAttribute('data-yll-ui', 'true');
+    box.setAttribute('role', 'status');
+    box.textContent = T('splitFallbackNotice');
+    document.body.appendChild(box);
+    splitNotice = box;
+  }
+
+  function hideSplitNotice() {
+    if (splitNotice) { splitNotice.remove(); splitNotice = null; }
+    const existing = document.getElementById('yll-split-notice');
+    if (existing) existing.remove();
+  }
+
+  function isOwnPaneSource(source) {
+    const wrap = splitWrap || document.getElementById('yll-split-wrap');
+    if (!wrap || !source) return null;
+    for (const f of wrap.querySelectorAll('iframe')) {
+      if (f.contentWindow && f.contentWindow === source) {
+        return f.getAttribute('data-yll-pane') || 'pane';
+      }
+    }
+    return null;
+  }
+
+  async function fallbackFromSplitView() {
+    if (!splitWrap && !document.getElementById('yll-split-wrap')) return;
+    closeSplitView();
+    state.isTranslated = false;
+    state.isTranslating = false;
+    showSplitNotice();
+    await translatePage({ forceBilingual: true });
+  }
+
+  async function handleSplitMessage(data, source) {
+    if (!data || !data.yllSplit) return;
+    const fromPane = isOwnPaneSource(source);
+    if (!fromPane) return;
+    if (data.type === 'paneReady' && (fromPane === 'translated' || data.pane === 'translated')) {
+      clearTimeout(splitLoadTimer);
+      splitLoadTimer = null;
+      return;
+    }
+    if (data.type === 'paneLoadFailed') {
+      await fallbackFromSplitView();
+      return;
+    }
+    if (data.type === 'paneBlocks') {
+      paneBlocks[fromPane] = Array.isArray(data.blocks) ? data.blocks : [];
+      return;
+    }
+    if (data.type === 'paneScrolled') {
+      const scrollTop = Math.max(0, Number(data.scrollTop) || 0);
+      if (fromPane === 'original') lastOrigScrollTop = scrollTop;
+      if (commandedScroll[fromPane] !== null && Math.abs(commandedScroll[fromPane] - scrollTop) <= 2) {
+        commandedScroll[fromPane] = null;
+        return;
+      }
+      commandedScroll[fromPane] = null;
+      if (!scrollSyncEnabled) return;
+
+      const otherPane = fromPane === 'original' ? 'translated' : 'original';
+      const wrap = splitWrap || document.getElementById('yll-split-wrap');
+      const otherFrame = wrap ? wrap.querySelector(`[data-yll-pane="${otherPane}"]`) : null;
+      if (!otherFrame || !otherFrame.contentWindow) return;
+
+      const origList = paneBlocks.original || [];
+      const transList = paneBlocks.translated || [];
+      const pairs = pairBlocks(origList.map(b => b.text), transList.map(b => b.text));
+      const direction = fromPane === 'original' ? 'origToTrans' : 'transToOrig';
+      const targetScroll = computeSyncedScrollTop(
+        scrollTop,
+        fromPane === 'original' ? origList : transList,
+        fromPane === 'original' ? transList : origList,
+        pairs,
+        direction
+      );
+      commandedScroll[otherPane] = targetScroll;
+      otherFrame.contentWindow.postMessage({ yllSplit: true, type: 'syncScrollTo', scrollTop: targetScroll }, '*');
+      return;
+    }
+    if (data.type === 'paneNavigate') {
+      const url = String(data.url || '');
+      if (!/^https?:\/\//i.test(url)) return;
+      await storageSet({ splitReopenOnLoad: true });
+      navigateTopTo(url);
+    }
+  }
+
+  window.addEventListener('message', (e) => {
+    if (paneRole === 'top') {
+      handleSplitMessage(e.data, e.source);
+    } else if ((paneRole === 'original' || paneRole === 'translated') && e.data && e.data.yllSplit && e.data.type === 'syncScrollTo') {
+      suppressNextScroll = true;
+      window.scrollTo(0, Number(e.data.scrollTop) || 0);
+    }
+  });
+
+  window.addEventListener('scroll', () => {
+    if (paneRole !== 'original' && paneRole !== 'translated') return;
+    if (suppressNextScroll) {
+      suppressNextScroll = false;
+      return;
+    }
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ yllSplit: true, type: 'paneScrolled', pane: paneRole, scrollTop: window.scrollY }, '*');
+      }
+    } catch (_) { /* ignore */ }
+  }, { passive: true });
+
+  async function openSplitView() {
+    if (!document.body) return;
+    closeSplitView({ restoreScroll: false });
+    hideSplitNotice();
+    lastOrigScrollTop = window.scrollY || 0;
+    paneBlocks = { original: [], translated: [] };
+    commandedScroll = { original: null, translated: null };
+    try { await api.runtime.sendMessage({ type: 'splitStart' }); } catch (_) { /* ignore */ }
+
+    prevHtmlOverflow = document.documentElement.style.overflow || '';
+    document.documentElement.style.overflow = 'hidden';
+
+    const wrap = document.createElement('div');
+    wrap.id = 'yll-split-wrap';
+    wrap.setAttribute('data-yll-ui', 'true');
+
+    const origFrame = document.createElement('iframe');
+    origFrame.className = 'yll-split-pane yll-original-pane';
+    origFrame.name = PANE_ORIGINAL;
+    origFrame.setAttribute('data-yll-pane', 'original');
+    origFrame.src = location.href;
+
+    const divider = document.createElement('div');
+    divider.className = 'yll-split-divider';
+
+    const transFrame = document.createElement('iframe');
+    transFrame.className = 'yll-split-pane yll-translated-pane';
+    transFrame.name = PANE_TRANSLATED;
+    transFrame.setAttribute('data-yll-pane', 'translated');
+    transFrame.src = location.href;
+    transFrame.addEventListener('error', () => { fallbackFromSplitView(); });
+
+    wrap.append(origFrame, divider, transFrame);
+    document.body.appendChild(wrap);
+    splitWrap = wrap;
+
+    clearTimeout(splitLoadTimer);
+    splitLoadTimer = setTimeout(() => { fallbackFromSplitView(); }, splitLoadTimeoutMs);
+
+    state.isTranslating = false;
+    state.isTranslated = true;
+    state.totalCount = 1;
+    state.translatedCount = 1;
+    syncBallMenu();
+  }
+
+  function closeSplitView({ restoreScroll = true } = {}) {
+    clearTimeout(splitLoadTimer);
+    splitLoadTimer = null;
+    const existing = splitWrap || document.getElementById('yll-split-wrap');
+    if (existing) {
+      existing.remove();
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      if (restoreScroll && typeof window.scrollTo === 'function') {
+        window.scrollTo(0, lastOrigScrollTop);
+      }
+      try { Promise.resolve(api.runtime.sendMessage({ type: 'splitStop' })).catch(() => {}); } catch (_) { /* ignore */ }
+    }
+    splitWrap = null;
+  }
+
+  async function applyPaneRole(role) {
+    paneRole = role;
+    if (role === 'top') return;
+    removeFloatBall();
+    hidePopup();
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ yllSplit: true, type: 'paneReady', pane: role }, '*');
+      }
+    } catch (_) { /* ignore */ }
+    if (role === 'translated') {
+      await translatePage({ forceReplace: true });
+    }
+    reportPaneBlocks();
+  }
+
   // auto：自动翻译名单触发的（不是用户按的）。账号被拒停下以后，只有用户
   // 自己再按一次翻译（或换引擎）才重试，自动触发不算。
-  async function translatePage({ auto = false } = {}) {
+  async function translatePage({ auto = false, forceReplace = false, forceBilingual = false } = {}) {
     if (state.isTranslating) return;
     if (halted && auto) return;
     halted = null;
@@ -747,7 +1112,18 @@
     const settings = await getSettings();
     state.engine = settings.engine || 'google';
     state.targetLang = settings.targetLang || 'zh-CN';
-    state.displayMode = settings.displayMode || 'bilingual';
+    if (settings.scrollSync !== undefined) scrollSyncEnabled = settings.scrollSync !== false;
+    state.displayMode = (forceReplace || paneRole === 'translated')
+      ? 'replace'
+      : forceBilingual
+        ? 'bilingual'
+        : (settings.displayMode || 'bilingual');
+
+    if (paneRole === 'top' && state.displayMode === 'split') {
+      await openSplitView();
+      return;
+    }
+
     state.isTranslating = true;
     syncBallMenu();
     const sess = session;
@@ -2109,6 +2485,8 @@
 
   function removeTranslations() {
     session++;
+    closeSplitView();
+    hideSplitNotice();
     stopDomWatch();
     resetQueues();
     dropRequests();
@@ -2179,7 +2557,7 @@
   // ===== 工具函数 =====
 
   function getSettings() {
-    return storageGet(['targetLang', 'engine', 'displayMode']);
+    return storageGet(['targetLang', 'engine', 'displayMode', 'scrollSync']);
   }
 
   function escHtml(str) {
@@ -2216,6 +2594,16 @@
       minTextLen,
       splitTweetParagraphs,
       setDisplayMode: (m) => { state.displayMode = m; },
+      detectPaneRole,
+      applyPaneRole,
+      handleSplitMessage,
+      setSplitLoadTimeout: (ms) => { splitLoadTimeoutMs = ms; },
+      pairBlocks,
+      computeSyncedScrollTop,
+      setScrollSync: (v) => { scrollSyncEnabled = Boolean(v); },
+      classifyPaneLinkClick,
+      setNavigateTop: (fn) => { navigateTopTo = fn; },
+      consumeSplitReopen,
       translateBlock,
       translatePage,
       translateCurrentSelection,

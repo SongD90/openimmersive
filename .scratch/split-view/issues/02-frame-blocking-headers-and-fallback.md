@@ -4,9 +4,9 @@
 
 **Blocked by:** 01: Core Split view tracer bullet
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Starting **Split view** activates header-removal rules scoped strictly to subframes in the active tab so `X-Frame-Options` and `Content-Security-Policy` `frame-ancestors` do not block the **original pane** or **translated pane**.
-- [ ] Turning **Split view** off or closing the tab removes the header-removal rules for that tab so no other pages or tabs lose clickjacking protection.
-- [ ] If the **translated pane** reports a load error or fails to become ready within the timeout, the **Split view** container is removed, the page translates using **Bilingual**, and the reader sees a brief notice explaining the fallback.
-- [ ] Automated tests verify rule registration and cleanup in the background context and fallback-to-**Bilingual** behaviour in the content context.
+- [x] Starting **Split view** activates header-removal rules scoped strictly to subframes in the active tab so `X-Frame-Options` and `Content-Security-Policy` `frame-ancestors` do not block the **original pane** or **translated pane**.
+- [x] Turning **Split view** off or closing the tab removes the header-removal rules for that tab so no other pages or tabs lose clickjacking protection.
+- [x] If the **translated pane** reports a load error or fails to become ready within the timeout, the **Split view** container is removed, the page translates using **Bilingual**, and the reader sees a brief notice explaining the fallback.
+- [x] Automated tests verify rule registration and cleanup in the background context and fallback-to-**Bilingual** behaviour in the content context.

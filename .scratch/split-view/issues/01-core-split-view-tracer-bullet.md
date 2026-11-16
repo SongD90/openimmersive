@@ -4,13 +4,13 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Readers can select **Split view** alongside **Bilingual** and **Replace** in Options and the toolbar popup, and the choice persists.
-- [ ] Existing **Bilingual** and **Replace** behaviour and defaults remain unchanged.
-- [ ] Toggling translation on when **Split view** is selected opens a full-window 50/50 container with a thin vertical divider, the **original pane** on the left, and the **translated pane** on the right, regardless of window width.
-- [ ] Sites and languages configured to auto-translate open directly into **Split view** when **Split view** is the active **display mode**.
-- [ ] The **original pane** displays the page as published without translating and without showing extension UI.
-- [ ] The **translated pane** translates the page in **Replace** mode using the reader's configured target language and engine, showing translation progress while hiding the `T` button, selection popup, and hover translation.
-- [ ] Toggling **Split view** off removes the two-frame container and returns the reader to the underlying page unchanged.
-- [ ] Automated tests verify mode selection persistence, container creation/teardown, and pane role behaviour at the existing test seams.
+- [x] Readers can select **Split view** alongside **Bilingual** and **Replace** in Options and the toolbar popup, and the choice persists.
+- [x] Existing **Bilingual** and **Replace** behaviour and defaults remain unchanged.
+- [x] Toggling translation on when **Split view** is selected opens a full-window 50/50 container with a thin vertical divider, the **original pane** on the left, and the **translated pane** on the right, regardless of window width.
+- [x] Sites and languages configured to auto-translate open directly into **Split view** when **Split view** is the active **display mode**.
+- [x] The **original pane** displays the page as published without translating and without showing extension UI.
+- [x] The **translated pane** translates the page in **Replace** mode using the reader's configured target language and engine, showing translation progress while hiding the `T` button, selection popup, and hover translation.
+- [x] Toggling **Split view** off removes the two-frame container and returns the reader to the underlying page unchanged.
+- [x] Automated tests verify mode selection persistence, container creation/teardown, and pane role behaviour at the existing test seams.

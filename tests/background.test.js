@@ -32,7 +32,11 @@ function loadBg({ fetchImpl, storageData = {} } = {}) {
       runtime: { onMessage: { addListener: fn => { listeners.message = fn; } } },
       tabs: {
         query: () => Promise.resolve([{ id: 1 }]),
-        sendMessage: () => Promise.resolve()
+        sendMessage: () => Promise.resolve(),
+        onRemoved: { addListener: fn => { listeners.tabRemoved = fn; } }
+      },
+      declarativeNetRequest: {
+        updateSessionRules: jest.fn(() => Promise.resolve())
       },
       commands: { onCommand: { addListener: fn => { listeners.command = fn; } } },
       i18n
@@ -915,5 +919,51 @@ describe('OPENI-060 localized login', () => {
     ctx.browser.tabs.create = jest.fn().mockResolvedValue({});
     await ctx.openSiteLogin();
     expect(ctx.browser.tabs.create).toHaveBeenCalledWith({ url: 'https://openimmersive.ai/?login=1' });
+  });
+});
+
+describe('Split view frame-blocking header rules (Ticket 02)', () => {
+  test('splitStart adds a subframe header-removal session rule scoped to the sender tab', async () => {
+    const ctx = loadBg();
+    const resp = await new Promise(resolve => {
+      ctx.__listeners.message({ type: 'splitStart' }, { tab: { id: 42 } }, resolve);
+    });
+    expect(resp).toEqual({ success: true });
+    expect(ctx.browser.declarativeNetRequest.updateSessionRules).toHaveBeenCalledWith({
+      removeRuleIds: [10042],
+      addRules: [
+        expect.objectContaining({
+          id: 10042,
+          action: {
+            type: 'modifyHeaders',
+            responseHeaders: [
+              { header: 'x-frame-options', operation: 'remove' },
+              { header: 'content-security-policy', operation: 'remove' }
+            ]
+          },
+          condition: {
+            tabIds: [42],
+            resourceTypes: ['sub_frame']
+          }
+        })
+      ]
+    });
+  });
+
+  test('splitStop and tab close remove the session rule for that tab', async () => {
+    const ctx = loadBg();
+    await new Promise(resolve => {
+      ctx.__listeners.message({ type: 'splitStop' }, { tab: { id: 42 } }, resolve);
+    });
+    expect(ctx.browser.declarativeNetRequest.updateSessionRules).toHaveBeenCalledWith({
+      removeRuleIds: [10042]
+    });
+
+    ctx.browser.declarativeNetRequest.updateSessionRules.mockClear();
+    expect(typeof ctx.__listeners.tabRemoved).toBe('function');
+    await ctx.__listeners.tabRemoved(42);
+    expect(ctx.browser.declarativeNetRequest.updateSessionRules).toHaveBeenCalledWith({
+      removeRuleIds: [10042]
+    });
   });
 });

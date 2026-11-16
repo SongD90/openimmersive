@@ -144,6 +144,18 @@
       <select id="selLang"></select>
     </div>
     <div class="row">
+      <span class="row-label" data-i18n="optDisplayMode">How translations are shown</span>
+      <select id="selDisplayMode">
+        <option value="bilingual" data-i18n="optBilingual">Bilingual</option>
+        <option value="replace" data-i18n="optReplace">Replace</option>
+        <option value="split" data-i18n="optSplitView">Split view</option>
+      </select>
+    </div>
+    <div class="row">
+      <span class="row-label" data-i18n="optScrollSync">Scroll sync in Split view</span>
+      <label class="switch"><input type="checkbox" id="swScrollSync" /><span class="slider"></span></label>
+    </div>
+    <div class="row">
       <span class="row-label" data-i18n="popupHover">Hover translation (hold Alt over a paragraph)</span>
       <label class="switch"><input type="checkbox" id="swHover" /><span class="slider"></span></label>
     </div>

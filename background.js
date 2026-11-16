@@ -115,7 +115,69 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true;
   }
+
+  // 分栏视图（Split view）：仅对当前标签页的子框架移除防嵌套响应头（ADR 0002）
+  if (message.type === 'splitStart') {
+    const tabId = sender && sender.tab ? sender.tab.id : message.tabId;
+    enableSplitFrameRules(tabId)
+      .then(() => sendResponse({ success: true }))
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
+  if (message.type === 'splitStop') {
+    const tabId = sender && sender.tab ? sender.tab.id : message.tabId;
+    disableSplitFrameRules(tabId)
+      .then(() => sendResponse({ success: true }))
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
 });
+
+// ===== 分栏视图（Split view）防嵌套头移除规则（ADR 0002）=====
+const SPLIT_RULE_BASE = 10000;
+
+function splitRuleId(tabId) {
+  return SPLIT_RULE_BASE + Number(tabId);
+}
+
+async function enableSplitFrameRules(tabId) {
+  if (tabId == null || !api.declarativeNetRequest || !api.declarativeNetRequest.updateSessionRules) return;
+  const id = splitRuleId(tabId);
+  await api.declarativeNetRequest.updateSessionRules({
+    removeRuleIds: [id],
+    addRules: [
+      {
+        id,
+        priority: 1,
+        action: {
+          type: 'modifyHeaders',
+          responseHeaders: [
+            { header: 'x-frame-options', operation: 'remove' },
+            { header: 'content-security-policy', operation: 'remove' }
+          ]
+        },
+        condition: {
+          tabIds: [Number(tabId)],
+          resourceTypes: ['sub_frame']
+        }
+      }
+    ]
+  });
+}
+
+async function disableSplitFrameRules(tabId) {
+  if (tabId == null || !api.declarativeNetRequest || !api.declarativeNetRequest.updateSessionRules) return;
+  await api.declarativeNetRequest.updateSessionRules({
+    removeRuleIds: [splitRuleId(tabId)]
+  });
+}
+
+if (api.tabs && api.tabs.onRemoved) {
+  api.tabs.onRemoved.addListener((tabId) => {
+    disableSplitFrameRules(tabId).catch(() => {});
+  });
+}
 
 // Use the browser language even when this extension's UI falls back to English.
 function siteLoginPath(locale) {

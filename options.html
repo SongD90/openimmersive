@@ -169,8 +169,19 @@
           <select id="selDisplayMode">
             <option value="bilingual" data-i18n="optBilingual">Side by side (original + translation)</option>
             <option value="replace" data-i18n="optReplace">Translation only</option>
+            <option value="split" data-i18n="optSplitView">Split view (original pane + translated pane)</option>
           </select>
           <p class="hint" data-i18n="optDisplayHint">In translation-only mode the original is merely hidden — "Show original" brings all of it back.</p>
+        </div>
+
+        <div class="toggle-row">
+          <div>
+            <div class="t-label" data-i18n="optScrollSync">Scroll sync in Split view</div>
+            <div class="t-desc" data-i18n="optScrollSyncDesc">Keep original pane and translated pane aligned block by block while scrolling</div>
+          </div>
+          <div class="t-right">
+            <label class="switch"><input type="checkbox" id="swScrollSync" /><span class="slider"></span></label>
+          </div>
         </div>
 
         <div class="toggle-row">
