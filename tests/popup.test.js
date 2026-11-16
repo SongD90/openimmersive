@@ -92,6 +92,40 @@ describe('popup display mode picker', () => {
     await new Promise(r => setTimeout(r, 0));
     expect(storage.scrollSync).toBe(false);
   });
+
+  test('Edge read:// URL keeps Translate button enabled and unwraps to real URL on click', async () => {
+    const html = fs.readFileSync(path.join(ROOT, 'popup.html'), 'utf8');
+    document.body.innerHTML = html.match(/<body[^>]*>([\s\S]*)<\/body>/)[1].replace(/<script[\s\S]*?<\/script>/g, '');
+    const storage = { displayMode: 'split' };
+    const readUrl = 'read://https_example.com/?url=https%3A%2F%2Fexample.com%2Farticle';
+    global.chrome = {
+      i18n: require('./i18n-stub').i18n,
+      runtime: { openOptionsPage: jest.fn(), sendMessage: jest.fn().mockResolvedValue({ success: true }) },
+      tabs: {
+        query: jest.fn(async () => [{ id: 9, url: readUrl }]),
+        sendMessage: jest.fn(async () => { throw new Error('Receiving end does not exist'); }),
+        update: jest.fn(async () => ({})),
+      },
+      storage: {
+        local: {
+          get: (keys, cb) => cb(Object.fromEntries(keys.filter(k => k in storage).map(k => [k, storage[k]]))),
+          set: (items, cb) => { Object.assign(storage, items); cb && cb(); },
+        },
+      },
+    };
+    global.YLI18n = require('../i18n.js');
+    global.YLLangs = require('../languages.js');
+    window.close = jest.fn();
+    new Function(fs.readFileSync(path.join(ROOT, 'popup.js'), 'utf8'))();
+    await new Promise(r => setTimeout(r, 0));
+
+    const btn = document.getElementById('btnTranslate');
+    expect(btn.disabled).toBe(false);
+    btn.click();
+    await new Promise(r => setTimeout(r, 0));
+    expect(storage.splitReopenOnLoad).toBe(true);
+    expect(chrome.tabs.update).toHaveBeenCalledWith(9, { url: 'https://example.com/article' });
+  });
 });
 
 describe('popup status line', () => {

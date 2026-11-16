@@ -1869,4 +1869,19 @@ describe('Split view core tracer bullet', () => {
     expect(stored.splitReopenOnLoad).toBe(false);
     expect(document.getElementById('yll-split-wrap')).not.toBeNull();
   });
+
+  test('Split view panes activate clean Reader mode and hide page clutter while keeping article content', async () => {
+    document.body.innerHTML = `
+      <aside id="sidebar-ad">Sponsored sidebar</aside>
+      <div role="complementary" id="comp-box">Related promos</div>
+      <div class="ad-banner" id="ad-top">Advertisement</div>
+      <article id="main-article"><p>Clean reader mode keeps the article body visible.</p></article>
+    `;
+    await fns.applyPaneRole('original');
+    expect(document.documentElement.getAttribute('data-yll-reader')).toBe('1');
+    expect(document.getElementById('sidebar-ad').getAttribute('data-yll-clutter')).toBe('1');
+    expect(document.getElementById('comp-box').getAttribute('data-yll-clutter')).toBe('1');
+    expect(document.getElementById('ad-top').getAttribute('data-yll-clutter')).toBe('1');
+    expect(document.getElementById('main-article').getAttribute('data-yll-clutter')).toBeNull();
+  });
 });

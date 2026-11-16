@@ -29,12 +29,36 @@ function storageGet(keys) {
   if (typeof browser !== 'undefined') return browser.storage.local.get(keys);
   return new Promise(r => chrome.storage.local.get(keys, r));
 }
+function storageSet(items) {
+  if (typeof browser !== 'undefined') return browser.storage.local.set(items);
+  return new Promise(r => chrome.storage.local.set(items, r));
+}
 
-// 键盘快捷键 Alt+T -> 向当前标签页发消息
+// 解析 Edge 阅读模式（read://https_example.com/?url=https%3A%2F%2F...）里的真实网页 URL
+function extractReadModeUrl(rawUrl) {
+  const s = String(rawUrl || '');
+  if (!/^read:/i.test(s)) return '';
+  try {
+    const qIdx = s.indexOf('?');
+    if (qIdx < 0) return '';
+    const target = new URL('http://x/' + s.slice(qIdx)).searchParams.get('url') || '';
+    return /^https?:\/\//i.test(target) ? target : '';
+  } catch (_) {
+    return '';
+  }
+}
+
+// 键盘快捷键 Alt+T -> 向当前标签页发消息（Edge read:// 阅读模式则跳回原网页并自动开启翻译/分栏）
 api.commands.onCommand.addListener(async (command) => {
   if (command === 'toggle-translation') {
     const [tab] = await api.tabs.query({ active: true, currentWindow: true });
     if (tab) {
+      const readTarget = extractReadModeUrl(tab.url);
+      if (readTarget && api.tabs.update) {
+        await storageSet({ splitReopenOnLoad: true });
+        await api.tabs.update(tab.id, { url: readTarget });
+        return;
+      }
       api.tabs.sendMessage(tab.id, { type: 'toggleTranslation' }).catch(() => {});
     }
   }
@@ -65,6 +89,11 @@ if (api.contextMenus) {
     if (info.menuItemId === 'yll-translate-selection') {
       api.tabs.sendMessage(tab.id, { type: 'translateSelection' }).catch(() => {});
     } else if (info.menuItemId === 'yll-translate-page') {
+      const readTarget = extractReadModeUrl(tab.url);
+      if (readTarget && api.tabs.update) {
+        storageSet({ splitReopenOnLoad: true }).then(() => api.tabs.update(tab.id, { url: readTarget })).catch(() => {});
+        return;
+      }
       api.tabs.sendMessage(tab.id, { type: 'toggleTranslation' }).catch(() => {});
     }
   });

@@ -20,6 +20,19 @@ let currentTab = null;
 let currentHost = '';
 let currentPageLang = '';
 let savedLang = '';
+
+function extractReadModeUrl(rawUrl) {
+  const s = String(rawUrl || '');
+  if (!/^read:/i.test(s)) return '';
+  try {
+    const qIdx = s.indexOf('?');
+    if (qIdx < 0) return '';
+    const target = new URL('http://x/' + s.slice(qIdx)).searchParams.get('url') || '';
+    return /^https?:\/\//i.test(target) ? target : '';
+  } catch (_) {
+    return '';
+  }
+}
 // 下拉末尾那条「全部 N 种语言」：选中它只是去设置页，不是一个语言码。
 const ALL_LANGS_OPTION = '__all__';
 // popup 只列常用语言；用户在设置页选了冷门语言时把它插进来，否则下拉里看不到自己的选择。
@@ -65,7 +78,9 @@ async function init() {
 
   const [tab] = await api.tabs.query({ active: true, currentWindow: true });
   currentTab = tab;
-  try { currentHost = tab && tab.url ? new URL(tab.url).hostname : ''; } catch { currentHost = ''; }
+  const readTarget = extractReadModeUrl(tab && tab.url);
+  const effectiveUrl = readTarget || (tab && tab.url) || '';
+  try { currentHost = effectiveUrl ? new URL(effectiveUrl).hostname : ''; } catch { currentHost = ''; }
   const sites = Array.isArray(data.autoTranslateSites) ? data.autoTranslateSites : [];
   swAutoSite.checked = !!currentHost && sites.includes(currentHost);
   swAutoSite.disabled = !currentHost;
@@ -84,8 +99,13 @@ async function init() {
     const resp = await api.tabs.sendMessage(tab.id, { type: 'getStatus' });
     updateUI(resp);
   } catch {
-    setStatus('dot-off', t('popupUnsupportedPage'));
-    btnTranslate.disabled = true;
+    if (readTarget) {
+      setStatus('dot-off', t('popupReady'));
+      btnTranslate.disabled = false;
+    } else {
+      setStatus('dot-off', t('popupUnsupportedPage'));
+      btnTranslate.disabled = true;
+    }
   }
 }
 
@@ -94,6 +114,13 @@ async function init() {
 btnTranslate.addEventListener('click', async () => {
   if (!currentTab) return;
   const targetLang = selLang.value;
+  const readTarget = extractReadModeUrl(currentTab.url);
+  if (readTarget && api.tabs.update) {
+    await setStorage({ targetLang, splitReopenOnLoad: true });
+    await api.tabs.update(currentTab.id, { url: readTarget });
+    window.close();
+    return;
+  }
   await setStorage({ targetLang });
 
   btnTranslate.disabled = true;

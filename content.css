@@ -65,6 +65,11 @@
   background: #2869b7;
 }
 
+/* 分栏视图内的净化阅读模式（Reader Mode）：隐藏广告、侧栏与悬浮遮罩，保留正文排版 */
+html[data-yll-reader="1"] [data-yll-clutter="1"] {
+  display: none !important;
+}
+
 #yll-split-notice {
   position: fixed;
   bottom: 16px;

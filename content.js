@@ -1098,11 +1098,44 @@
     splitWrap = null;
   }
 
+  const READER_CLUTTER_SELECTOR = [
+    'aside',
+    '[role="complementary"]',
+    '[aria-label*="advertisement" i]',
+    '[aria-label*="sponsored" i]',
+    '.ad',
+    '.ads',
+    '.ad-banner',
+    '.advertisement',
+    '[id*="google_ads"]',
+    '[class*="cookie-banner" i]',
+    '[id*="cookie-banner" i]',
+    '[class*="paywall" i]'
+  ].join(', ');
+
+  function cleanPaneClutter() {
+    if (!document.documentElement || !document.body) return;
+    document.documentElement.setAttribute('data-yll-reader', '1');
+    for (const el of document.querySelectorAll(READER_CLUTTER_SELECTOR)) {
+      if (el.querySelector('article, main, [role="main"]') || el.closest('article')) continue;
+      el.setAttribute('data-yll-clutter', '1');
+    }
+  }
+
+  function restorePaneClutter() {
+    if (document.documentElement) document.documentElement.removeAttribute('data-yll-reader');
+    document.querySelectorAll('[data-yll-clutter]').forEach(el => el.removeAttribute('data-yll-clutter'));
+  }
+
   async function applyPaneRole(role) {
     paneRole = role;
-    if (role === 'top') return;
+    if (role === 'top') {
+      restorePaneClutter();
+      return;
+    }
     removeFloatBall();
     hidePopup();
+    cleanPaneClutter();
     try {
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ yllSplit: true, type: 'paneReady', pane: role }, '*');
